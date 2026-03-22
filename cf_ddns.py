@@ -33,10 +33,12 @@ def main():
     with httpx.Client(base_url="https://api.cloudflare.com/client/v4") as client:
         # 1. Get current public IP
         try:
-            public_ip = httpx.get("https://api.ipify.org?format=json").json()["ip"]
+            response = httpx.get("https://api.ipify.org?format=json", timeout=10.0)
+            response.raise_for_status()
+            public_ip = response.json()["ip"]
             print(f"Current public IP: {public_ip}")
         except Exception as e:
-            print(f"Error fetching public IP: {e}")
+            print(f"Error fetching public IP from ipify: {e}")
             sys.exit(1)
 
         # 2. Get Zone ID
