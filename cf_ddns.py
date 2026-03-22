@@ -9,7 +9,27 @@ import os
 import sys
 import time
 import httpx
+import logging
+from logging.handlers import TimedRotatingFileHandler
 from dotenv import load_dotenv
+
+def setup_logging(retention_days):
+    log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    log_file = "cf_ddns.log"
+    
+    # Daily rotation, keep 'retention_days' files
+    handler = TimedRotatingFileHandler(
+        log_file, when="midnight", interval=1, backupCount=retention_days
+    )
+    handler.setFormatter(log_formatter)
+    
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(log_formatter)
+    
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    logger.addHandler(handler)
+    logger.addHandler(console_handler)
 
 def main():
     # Load configuration from .env file if it exists
@@ -23,9 +43,12 @@ def main():
     proxied = os.getenv("CF_PROXIED", "false").lower() == "true"
     retry_count = int(os.getenv("CF_RETRY_COUNT", "3"))
     retry_delay = int(os.getenv("CF_RETRY_DELAY", "10"))
+    retention_days = int(os.getenv("CF_LOG_RETENTION_DAYS", "7"))
+
+    setup_logging(retention_days)
 
     if not all([api_token, zone_name, record_name]):
-        print("Error: CF_API_TOKEN, CF_ZONE_NAME, and CF_RECORD_NAME must be set.")
+        logging.error("CF_API_TOKEN, CF_ZONE_NAME, and CF_RECORD_NAME must be set.")
         sys.exit(1)
 
     headers = {
@@ -65,7 +88,7 @@ def main():
                     pass
             
             if attempt < retry_count:
-                print(f"Failed to fetch {'IPv6' if ipv6 else 'IPv4'}. Retrying in {retry_delay}s...")
+                logging.warning(f"Failed to fetch {'IPv6' if ipv6 else 'IPv4'}. Retrying in {retry_delay}s...")
                 time.sleep(retry_delay)
         return None
 
@@ -75,20 +98,20 @@ def main():
         public_ipv6 = get_public_ip(ipv6=True) if aaaa_record_name else None
 
         if not public_ipv4:
-            print("Error: Could not fetch public IPv4 address.")
+            logging.error("Could not fetch public IPv4 address.")
             sys.exit(1)
         
-        print(f"Current IPv4: {public_ipv4}")
+        logging.info(f"Current IPv4: {public_ipv4}")
         if aaaa_record_name:
             if public_ipv6:
-                print(f"Current IPv6: {public_ipv6}")
+                logging.info(f"Current IPv6: {public_ipv6}")
             else:
-                print("Warning: AAAA record configured but could not fetch public IPv6.")
+                logging.warning("AAAA record configured but could not fetch public IPv6.")
 
         # 2. Get Zone ID
         zone_resp = client.get("/zones", params={"name": zone_name}, headers=headers).json()
         if not zone_resp.get("success") or not zone_resp.get("result"):
-            print(f"Error: Could not find zone {zone_name}.")
+            logging.error(f"Could not find zone {zone_name}.")
             sys.exit(1)
         zone_id = zone_resp["result"][0]["id"]
 
@@ -108,25 +131,27 @@ def main():
             # 4. Update or Create
             if record:
                 if record["content"] == content:
-                    print(f"{ip_type} record {name} is already up to date ({content}).")
+                    logging.info(f"{ip_type} record {name} is already up to date ({content}).")
                     return
 
-                print(f"Updating {ip_type} record {name} to {content}...")
+                logging.info(f"Updating {ip_type} record {name} to {content}...")
                 resp = client.put(
                     f"/zones/{zone_id}/dns_records/{record['id']}",
                     headers=headers,
                     json={"type": ip_type, "name": name, "content": content, "proxied": proxied, "ttl": 1}
                 ).json()
             else:
-                print(f"Creating {ip_type} record {name} -> {content}...")
+                logging.info(f"Creating {ip_type} record {name} -> {content}...")
                 resp = client.post(
                     f"/zones/{zone_id}/dns_records",
                     headers=headers,
                     json={"type": ip_type, "name": name, "content": content, "proxied": proxied, "ttl": 1}
                 ).json()
 
-            if not resp.get("success"):
-                print(f"Failed to process {name}: {resp.get('errors')}")
+            if resp.get("success"):
+                logging.info(f"Successfully processed {ip_type} record {name}.")
+            else:
+                logging.error(f"Failed to process {name}: {resp.get('errors')}")
 
         # Process records
         update_or_create(record_name, "A", public_ipv4)

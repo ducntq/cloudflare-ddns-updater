@@ -26,8 +26,9 @@ The script can be configured via environment variables or a `.env` file.
 | `CF_PROXIED` | Use Cloudflare Proxy (Orange Cloud) | `false` |
 | `CF_RETRY_COUNT` | Number of retries for IP detection | `3` |
 | `CF_RETRY_DELAY` | Delay between retries in seconds | `10` |
+| `CF_LOG_RETENTION_DAYS` | Number of days to keep log files | `7` |
 
-*Note: The script will automatically create the DNS record if it does not already exist.*
+*Note: The script will automatically create the DNS record if it does not already exist. Logs are saved to `cf_ddns.log` with daily rotation.*
 
 ## Usage
 
