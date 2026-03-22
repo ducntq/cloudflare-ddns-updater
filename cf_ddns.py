@@ -10,6 +10,7 @@ import sys
 import time
 import httpx
 import logging
+import argparse
 from logging.handlers import TimedRotatingFileHandler
 from dotenv import load_dotenv
 
@@ -39,17 +40,37 @@ def main():
     # Load configuration from .env file if it exists
     load_dotenv()
     
-    # Load configuration from environment
-    api_token = os.getenv("CF_API_TOKEN")
-    zone_name = os.getenv("CF_ZONE_NAME")
-    # Parse record names as lists
-    record_names = [r.strip() for r in os.getenv("CF_RECORD_NAME", "").split(",") if r.strip()]
-    aaaa_record_names = [r.strip() for r in os.getenv("CF_AAAA_RECORD_NAME", "").split(",") if r.strip()]
-    proxied = os.getenv("CF_PROXIED", "false").lower() == "true"
-    dry_run = os.getenv("CF_DRY_RUN", "false").lower() == "true"
-    retry_count = int(os.getenv("CF_RETRY_COUNT", "3"))
-    retry_delay = int(os.getenv("CF_RETRY_DELAY", "10"))
-    retention_days = int(os.getenv("CF_LOG_RETENTION_DAYS", "7"))
+    parser = argparse.ArgumentParser(description="Cloudflare DDNS Updater")
+    parser.add_argument("-t", "--token", help="Cloudflare API Token (CF_API_TOKEN)")
+    parser.add_argument("-z", "--zone", help="Cloudflare Zone Name (CF_ZONE_NAME)")
+    parser.add_argument("-r", "--records", help="Comma-separated FQDNs for A records (CF_RECORD_NAME)")
+    parser.add_argument("-a", "--aaaa-records", help="Comma-separated FQDNs for AAAA records (CF_AAAA_RECORD_NAME)")
+    parser.add_argument("-p", "--proxied", action="store_true", help="Enable Cloudflare proxy (CF_PROXIED)")
+    parser.add_argument("--dry-run", action="store_true", help="Enable dry run mode (CF_DRY_RUN)")
+    parser.add_argument("--retry-count", type=int, help="Number of retries (CF_RETRY_COUNT)")
+    parser.add_argument("--retry-delay", type=int, help="Delay between retries (CF_RETRY_DELAY)")
+    parser.add_argument("--retention-days", type=int, help="Log retention days (CF_LOG_RETENTION_DAYS)")
+    
+    args = parser.parse_args()
+
+    # Load configuration from environment, overridden by CLI arguments
+    api_token = args.token or os.getenv("CF_API_TOKEN")
+    zone_name = args.zone or os.getenv("CF_ZONE_NAME")
+    
+    raw_records = args.records or os.getenv("CF_RECORD_NAME", "")
+    record_names = [r.strip() for r in raw_records.split(",") if r.strip()]
+    
+    raw_aaaa_records = args.aaaa_records or os.getenv("CF_AAAA_RECORD_NAME", "")
+    aaaa_record_names = [r.strip() for r in raw_aaaa_records.split(",") if r.strip()]
+    
+    # Flags: if command line flag is set, it overrides ENV. 
+    # For booleans, we assume CLI presence means True.
+    proxied = args.proxied if args.proxied else os.getenv("CF_PROXIED", "false").lower() == "true"
+    dry_run = args.dry_run if args.dry_run else os.getenv("CF_DRY_RUN", "false").lower() == "true"
+    
+    retry_count = args.retry_count if args.retry_count is not None else int(os.getenv("CF_RETRY_COUNT", "3"))
+    retry_delay = args.retry_delay if args.retry_delay is not None else int(os.getenv("CF_RETRY_DELAY", "10"))
+    retention_days = args.retention_days if args.retention_days is not None else int(os.getenv("CF_LOG_RETENTION_DAYS", "7"))
 
     setup_logging(retention_days)
 
@@ -57,7 +78,7 @@ def main():
         logging.info("--- DRY RUN MODE ENABLED ---")
 
     if not all([api_token, zone_name, record_names]):
-        logging.error("CF_API_TOKEN, CF_ZONE_NAME, and CF_RECORD_NAME must be set.")
+        logging.error("Missing required configuration: API token, zone name, and record names must be provided via CLI or environment.")
         sys.exit(1)
 
     headers = {

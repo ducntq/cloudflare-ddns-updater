@@ -39,6 +39,26 @@ You can run the script directly with `uv`:
 uv run cf_ddns.py
 ```
 
+### CLI Parameters
+
+You can also pass configuration via CLI arguments, which will override `.env` values:
+
+```bash
+uv run cf_ddns.py --token YOUR_TOKEN --zone example.com --records home.example.com --dry-run
+```
+
+| Argument | Shorthand | Description |
+|----------|-----------|-------------|
+| `--token` | `-t` | Cloudflare API Token |
+| `--zone` | `-z` | Cloudflare Zone Name |
+| `--records` | `-r` | Comma-separated A records |
+| `--aaaa-records`| `-a` | Comma-separated AAAA records |
+| `--proxied` | `-p` | Enable Cloudflare proxy (flag) |
+| `--dry-run` | | Enable dry run mode (flag) |
+| `--retry-count` | | Number of retries |
+| `--retry-delay` | | Delay between retries (seconds) |
+| `--retention-days`| | Log retention days |
+
 ## Scheduling with Cron
 
 To automate this every 5 minutes, add a line to your `crontab -e`:
