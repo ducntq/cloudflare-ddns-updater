@@ -7,6 +7,7 @@
 
 import os
 import sys
+import time
 import httpx
 from dotenv import load_dotenv
 
@@ -20,6 +21,8 @@ def main():
     record_name = os.getenv("CF_RECORD_NAME")
     proxied = os.getenv("CF_PROXIED", "false").lower() == "true"
     create_if_not_exists = os.getenv("CF_CREATE_IF_NOT_EXISTS", "false").lower() == "true"
+    retry_count = int(os.getenv("CF_RETRY_COUNT", "3"))
+    retry_delay = int(os.getenv("CF_RETRY_DELAY", "10"))
 
     if not all([api_token, zone_name, record_name]):
         print("Error: CF_API_TOKEN, CF_ZONE_NAME, and CF_RECORD_NAME must be set.")
@@ -32,14 +35,21 @@ def main():
 
     with httpx.Client(base_url="https://api.cloudflare.com/client/v4") as client:
         # 1. Get current public IP
-        try:
-            response = httpx.get("https://api.ipify.org?format=json", timeout=10.0)
-            response.raise_for_status()
-            public_ip = response.json()["ip"]
-            print(f"Current public IP: {public_ip}")
-        except Exception as e:
-            print(f"Error fetching public IP from ipify: {e}")
-            sys.exit(1)
+        public_ip = None
+        for attempt in range(retry_count + 1):
+            try:
+                response = httpx.get("https://api.ipify.org?format=json", timeout=10.0)
+                response.raise_for_status()
+                public_ip = response.json()["ip"]
+                print(f"Current public IP: {public_ip}")
+                break
+            except Exception as e:
+                if attempt < retry_count:
+                    print(f"Error fetching public IP (attempt {attempt + 1}/{retry_count + 1}): {e}. Retrying in {retry_delay}s...")
+                    time.sleep(retry_delay)
+                else:
+                    print(f"Error fetching public IP after {retry_count + 1} attempts: {e}")
+                    sys.exit(1)
 
         # 2. Get Zone ID
         zone_resp = client.get(f"/zones", params={"name": zone_name}, headers=headers).json()
