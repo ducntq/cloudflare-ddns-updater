@@ -21,7 +21,8 @@ The script can be configured via environment variables or a `.env` file.
 |----------|-------------|---------|
 | `CF_API_TOKEN` | Your Cloudflare API Token | **Required** |
 | `CF_ZONE_NAME` | The root domain (e.g., `example.com`) | **Required** |
-| `CF_RECORD_NAME` | The FQDN to update (e.g., `home.example.com`) | **Required** |
+| `CF_RECORD_NAME` | The FQDN to update for IPv4 (e.g., `home.example.com`) | **Required** |
+| `CF_AAAA_RECORD_NAME` | The FQDN to update for IPv6 (e.g., `v6.home.example.com`) | Optional |
 | `CF_PROXIED` | Use Cloudflare Proxy (Orange Cloud) | `false` |
 | `CF_RETRY_COUNT` | Number of retries for IP detection | `3` |
 | `CF_RETRY_DELAY` | Delay between retries in seconds | `10` |
