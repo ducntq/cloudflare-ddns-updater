@@ -45,11 +45,15 @@ def main():
     record_name = os.getenv("CF_RECORD_NAME")
     aaaa_record_name = os.getenv("CF_AAAA_RECORD_NAME")
     proxied = os.getenv("CF_PROXIED", "false").lower() == "true"
+    dry_run = os.getenv("CF_DRY_RUN", "false").lower() == "true"
     retry_count = int(os.getenv("CF_RETRY_COUNT", "3"))
     retry_delay = int(os.getenv("CF_RETRY_DELAY", "10"))
     retention_days = int(os.getenv("CF_LOG_RETENTION_DAYS", "7"))
 
     setup_logging(retention_days)
+
+    if dry_run:
+        logging.info("--- DRY RUN MODE ENABLED ---")
 
     if not all([api_token, zone_name, record_name]):
         logging.error("CF_API_TOKEN, CF_ZONE_NAME, and CF_RECORD_NAME must be set.")
@@ -138,6 +142,10 @@ def main():
                     logging.info(f"{ip_type} record {name} is already up to date ({content}).")
                     return
 
+                if dry_run:
+                    logging.info(f"[DRY RUN] Would update {ip_type} record {name} to {content}...")
+                    return
+
                 logging.info(f"Updating {ip_type} record {name} to {content}...")
                 resp = client.put(
                     f"/zones/{zone_id}/dns_records/{record['id']}",
@@ -145,6 +153,10 @@ def main():
                     json={"type": ip_type, "name": name, "content": content, "proxied": proxied, "ttl": 1}
                 ).json()
             else:
+                if dry_run:
+                    logging.info(f"[DRY RUN] Would create {ip_type} record {name} -> {content}...")
+                    return
+
                 logging.info(f"Creating {ip_type} record {name} -> {content}...")
                 resp = client.post(
                     f"/zones/{zone_id}/dns_records",

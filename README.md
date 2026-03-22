@@ -24,6 +24,7 @@ The script can be configured via environment variables or a `.env` file.
 | `CF_RECORD_NAME` | The FQDN to update for IPv4 (e.g., `home.example.com`) | **Required** |
 | `CF_AAAA_RECORD_NAME` | The FQDN to update for IPv6 (e.g., `v6.home.example.com`) | Optional |
 | `CF_PROXIED` | Use Cloudflare Proxy (Orange Cloud) | `false` |
+| `CF_DRY_RUN` | If `true`, only detect and check changes, don't update Cloudflare | `false` |
 | `CF_RETRY_COUNT` | Number of retries for IP detection | `3` |
 | `CF_RETRY_DELAY` | Delay between retries in seconds | `10` |
 | `CF_LOG_RETENTION_DAYS` | Number of days to keep log files | `7` |
