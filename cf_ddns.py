@@ -34,21 +34,36 @@ def main():
 
     with httpx.Client(base_url="https://api.cloudflare.com/client/v4") as client:
         # 1. Get current public IP
+        ip_services = [
+            {"url": "https://api.ipify.org?format=json", "key": "ip"},
+            {"url": "https://api.myip.com", "key": "ip"},
+            {"url": "https://ipinfo.io/json", "key": "ip"},
+        ]
+        
         public_ip = None
+        success = False
+        
         for attempt in range(retry_count + 1):
-            try:
-                response = httpx.get("https://api.ipify.org?format=json", timeout=10.0)
-                response.raise_for_status()
-                public_ip = response.json()["ip"]
-                print(f"Current public IP: {public_ip}")
+            for service in ip_services:
+                try:
+                    response = httpx.get(service["url"], timeout=10.0)
+                    response.raise_for_status()
+                    public_ip = response.json()[service["key"]]
+                    print(f"Current public IP: {public_ip} (via {service['url']})")
+                    success = True
+                    break
+                except Exception as e:
+                    print(f"Warning: Failed to fetch IP from {service['url']}: {e}")
+            
+            if success:
                 break
-            except Exception as e:
-                if attempt < retry_count:
-                    print(f"Error fetching public IP (attempt {attempt + 1}/{retry_count + 1}): {e}. Retrying in {retry_delay}s...")
-                    time.sleep(retry_delay)
-                else:
-                    print(f"Error fetching public IP after {retry_count + 1} attempts: {e}")
-                    sys.exit(1)
+                
+            if attempt < retry_count:
+                print(f"All IP services failed. Retrying in {retry_delay}s (attempt {attempt + 1}/{retry_count + 1})...")
+                time.sleep(retry_delay)
+            else:
+                print(f"Error: Could not fetch public IP after {retry_count + 1} attempts across all services.")
+                sys.exit(1)
 
         # 2. Get Zone ID
         zone_resp = client.get(f"/zones", params={"name": zone_name}, headers=headers).json()
