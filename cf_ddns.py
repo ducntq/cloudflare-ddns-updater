@@ -20,7 +20,6 @@ def main():
     zone_name = os.getenv("CF_ZONE_NAME")
     record_name = os.getenv("CF_RECORD_NAME")
     proxied = os.getenv("CF_PROXIED", "false").lower() == "true"
-    create_if_not_exists = os.getenv("CF_CREATE_IF_NOT_EXISTS", "false").lower() == "true"
     retry_count = int(os.getenv("CF_RETRY_COUNT", "3"))
     retry_delay = int(os.getenv("CF_RETRY_DELAY", "10"))
 
@@ -69,52 +68,49 @@ def main():
         record = records[0] if records else None
 
         # 4. Update or Create
-        if not record:
-            if create_if_not_exists:
-                print(f"Record {record_name} not found. Creating...")
-                create_resp = client.post(
-                    f"/zones/{zone_id}/dns_records",
-                    headers=headers,
-                    json={
-                        "type": "A",
-                        "name": record_name,
-                        "content": public_ip,
-                        "proxied": proxied,
-                        "ttl": 1  # Automatic
-                    }
-                ).json()
-                if create_resp.get("success"):
-                    print(f"Successfully created {record_name} -> {public_ip}")
-                else:
-                    print(f"Failed to create: {create_resp.get('errors')}")
-                    sys.exit(1)
-            else:
-                print(f"Error: Record {record_name} does not exist and CF_CREATE_IF_NOT_EXISTS is false.")
-                sys.exit(1)
-        else:
+        if record:
             current_ip = record["content"]
             record_id = record["id"]
 
             if current_ip == public_ip:
                 print(f"IP has not changed ({public_ip}). No update needed.")
+                sys.exit(0)
+
+            print(f"Updating {record_name} from {current_ip} to {public_ip}...")
+            update_resp = client.put(
+                f"/zones/{zone_id}/dns_records/{record_id}",
+                headers=headers,
+                json={
+                    "type": "A",
+                    "name": record_name,
+                    "content": public_ip,
+                    "proxied": proxied,
+                    "ttl": 1
+                }
+            ).json()
+            if update_resp.get("success"):
+                print(f"Successfully updated {record_name} to {public_ip}")
             else:
-                print(f"Updating {record_name} from {current_ip} to {public_ip}...")
-                update_resp = client.put(
-                    f"/zones/{zone_id}/dns_records/{record_id}",
-                    headers=headers,
-                    json={
-                        "type": "A",
-                        "name": record_name,
-                        "content": public_ip,
-                        "proxied": proxied,
-                        "ttl": 1
-                    }
-                ).json()
-                if update_resp.get("success"):
-                    print(f"Successfully updated {record_name} to {public_ip}")
-                else:
-                    print(f"Failed to update: {update_resp.get('errors')}")
-                    sys.exit(1)
+                print(f"Failed to update: {update_resp.get('errors')}")
+                sys.exit(1)
+        else:
+            print(f"Record {record_name} not found. Creating...")
+            create_resp = client.post(
+                f"/zones/{zone_id}/dns_records",
+                headers=headers,
+                json={
+                    "type": "A",
+                    "name": record_name,
+                    "content": public_ip,
+                    "proxied": proxied,
+                    "ttl": 1  # Automatic
+                }
+            ).json()
+            if create_resp.get("success"):
+                print(f"Successfully created {record_name} -> {public_ip}")
+            else:
+                print(f"Failed to create: {create_resp.get('errors')}")
+                sys.exit(1)
 
 if __name__ == "__main__":
     main()
