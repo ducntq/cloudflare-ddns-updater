@@ -15,7 +15,11 @@ from dotenv import load_dotenv
 
 def setup_logging(retention_days):
     log_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    log_file = "cf_ddns.log"
+    log_dir = "logs"
+    log_file = os.path.join(log_dir, "cf_ddns.log")
+    
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
     
     # Daily rotation, keep 'retention_days' files
     handler = TimedRotatingFileHandler(
