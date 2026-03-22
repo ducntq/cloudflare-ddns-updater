@@ -42,8 +42,9 @@ def main():
     # Load configuration from environment
     api_token = os.getenv("CF_API_TOKEN")
     zone_name = os.getenv("CF_ZONE_NAME")
-    record_name = os.getenv("CF_RECORD_NAME")
-    aaaa_record_name = os.getenv("CF_AAAA_RECORD_NAME")
+    # Parse record names as lists
+    record_names = [r.strip() for r in os.getenv("CF_RECORD_NAME", "").split(",") if r.strip()]
+    aaaa_record_names = [r.strip() for r in os.getenv("CF_AAAA_RECORD_NAME", "").split(",") if r.strip()]
     proxied = os.getenv("CF_PROXIED", "false").lower() == "true"
     dry_run = os.getenv("CF_DRY_RUN", "false").lower() == "true"
     retry_count = int(os.getenv("CF_RETRY_COUNT", "3"))
@@ -55,7 +56,7 @@ def main():
     if dry_run:
         logging.info("--- DRY RUN MODE ENABLED ---")
 
-    if not all([api_token, zone_name, record_name]):
+    if not all([api_token, zone_name, record_names]):
         logging.error("CF_API_TOKEN, CF_ZONE_NAME, and CF_RECORD_NAME must be set.")
         sys.exit(1)
 
@@ -103,18 +104,18 @@ def main():
     with httpx.Client(base_url="https://api.cloudflare.com/client/v4") as client:
         # 1. Get current public IPs
         public_ipv4 = get_public_ip(ipv6=False)
-        public_ipv6 = get_public_ip(ipv6=True) if aaaa_record_name else None
+        public_ipv6 = get_public_ip(ipv6=True) if aaaa_record_names else None
 
         if not public_ipv4:
             logging.error("Could not fetch public IPv4 address.")
             sys.exit(1)
         
         logging.info(f"Current IPv4: {public_ipv4}")
-        if aaaa_record_name:
+        if aaaa_record_names:
             if public_ipv6:
                 logging.info(f"Current IPv6: {public_ipv6}")
             else:
-                logging.warning("AAAA record configured but could not fetch public IPv6.")
+                logging.warning("AAAA records configured but could not fetch public IPv6.")
 
         # 2. Get Zone ID
         zone_resp = client.get("/zones", params={"name": zone_name}, headers=headers).json()
@@ -170,9 +171,12 @@ def main():
                 logging.error(f"Failed to process {name}: {resp.get('errors')}")
 
         # Process records
-        update_or_create(record_name, "A", public_ipv4)
-        if aaaa_record_name and public_ipv6:
-            update_or_create(aaaa_record_name, "AAAA", public_ipv6)
+        for name in record_names:
+            update_or_create(name, "A", public_ipv4)
+        
+        if aaaa_record_names and public_ipv6:
+            for name in aaaa_record_names:
+                update_or_create(name, "AAAA", public_ipv6)
 
 if __name__ == "__main__":
     main()
